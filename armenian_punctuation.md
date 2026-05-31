@@ -26,7 +26,7 @@ the sentence. This is the biggest divergence from Latin-script conventions.
 
 **Examples:**
 
-| English | Wrong ❌ | Correct ✓ |
+| English | Wrong  | Correct  |
 |---|---|---|
 | Are you coming? | Դու գալի՞ս ես? | Դու գա՞լիս ես |
 | What a day! | Ի՜նչ օր է! | Ի՜նչ օր է |
