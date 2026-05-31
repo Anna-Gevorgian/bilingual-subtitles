@@ -1,97 +1,124 @@
-"""STEP 2 — Speech Recognition (ASR).
+"""STEP 7 — Validation.
 
-Transcribes audio with openai-whisper. We request **word-level timestamps**
-because they are what makes Step 3 able to break cues at word boundaries with
-accurate timing (instead of guessing splits inside a coarse Whisper segment).
+Checks a finished cue list against the house style and produces a list of
+`Violation`s plus a human-readable report. CRITICAL findings (overlaps, empty
+text, degenerate timing) are flagged for human review; everything else is a
+WARNING.
 
-Returns a flat list of `Word` objects. If, for some reason, word timestamps are
-unavailable, we fall back to segment-level timing in `segments_to_words()`.
+The validator is intentionally non-destructive: it never edits subtitles, it
+only reports. This keeps the "never change meaning / never hallucinate"
+guarantees intact — if a translated cue is too long, we surface it rather than
+truncating it.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import List
 
 from config import Config
-from models import Word
+from models import CRITICAL, WARNING, Cue, Violation
 
 logger = logging.getLogger(__name__)
 
 
-def transcribe(audio_path: str, config: Config | None = None) -> Dict[str, Any]:
-    """Run Whisper and return its raw result dict (segments + words).
-
-    Whisper is imported lazily so the rest of the pipeline (and the unit tests
-    for segmentation/validation) do not require torch to be installed.
-    """
+def validate(cues: List[Cue], track: str, config: Config | None = None
+             ) -> List[Violation]:
     config = config or Config()
-    import whisper  # lazy import (heavy: pulls in torch)
+    out: List[Violation] = []
 
-    logger.info("Loading Whisper model '%s'", config.whisper_model)
-    model = whisper.load_model(config.whisper_model)
+    if not cues:
+        out.append(Violation(track, 0, "empty_track", CRITICAL,
+                             "No subtitle cues were produced."))
+        return out
 
-    logger.info("Transcribing %s", audio_path)
-    result = model.transcribe(
-        audio_path,
-        language=config.source_language,   # None -> auto-detect
-        task="transcribe",                 # NOT "translate": Step 5 does HY
-        word_timestamps=True,
-        verbose=False,
-    )
-    n_seg = len(result.get("segments", []))
-    logger.info("ASR done: %d segments, detected language '%s'",
-                n_seg, result.get("language"))
-    return result
+    for i, cue in enumerate(cues):
+        idx = cue.index or (i + 1)
 
+        # Empty / missing text.
+        if not cue.text.strip():
+            out.append(Violation(track, idx, "empty_cue", CRITICAL,
+                                 "Cue has no text."))
 
-def result_to_words(result: Dict[str, Any]) -> List[Word]:
-    """Flatten a Whisper result into a single ordered list of `Word`.
+        # Degenerate timing.
+        if cue.duration <= 0:
+            out.append(Violation(track, idx, "bad_duration", CRITICAL,
+                                 f"Non-positive duration ({cue.duration:.3f}s)."))
 
-    Prefers per-word timestamps; falls back to splitting segment text evenly
-    across the segment's time span when words are missing.
-    """
-    words: List[Word] = []
-    for seg in result.get("segments", []):
-        seg_words = seg.get("words") or []
-        if seg_words:
-            for w in seg_words:
-                text = (w.get("word") or "").strip()
-                if not text:
-                    continue
-                words.append(Word(text=text,
-                                  start=float(w["start"]),
-                                  end=float(w["end"])))
-        else:
-            words.extend(_split_segment(seg))
-    # Guarantee monotonic, non-degenerate timing.
-    return _sanitize(words)
+        # Overlap with previous cue.
+        if i > 0 and cue.start < cues[i - 1].end - 1e-6:
+            out.append(Violation(
+                track, idx, "timing_overlap", CRITICAL,
+                f"Starts at {cue.start:.3f}s before previous cue ends "
+                f"({cues[i - 1].end:.3f}s)."))
 
+        # Line count.
+        if len(cue.lines) > config.max_lines_per_cue:
+            out.append(Violation(
+                track, idx, "too_many_lines", WARNING,
+                f"{len(cue.lines)} lines (max {config.max_lines_per_cue})."))
 
-def _split_segment(seg: Dict[str, Any]) -> List[Word]:
-    """Fallback: distribute a segment's time proportionally over its words."""
-    text = (seg.get("text") or "").strip()
-    toks = text.split()
-    if not toks:
-        return []
-    start, end = float(seg["start"]), float(seg["end"])
-    span = max(end - start, 1e-3)
-    total = sum(len(t) for t in toks)
-    out, cursor = [], start
-    for t in toks:
-        frac = len(t) / total if total else 1.0 / len(toks)
-        w_end = min(cursor + span * frac, end)
-        out.append(Word(text=t, start=cursor, end=w_end))
-        cursor = w_end
+        # Line length.
+        for ln, line in enumerate(cue.lines, start=1):
+            if len(line) > config.max_line_length:
+                out.append(Violation(
+                    track, idx, "line_too_long", WARNING,
+                    f"Line {ln} is {len(line)} chars "
+                    f"(max {config.max_line_length}): {line!r}"))
+
+        # Reading speed.
+        cps = cue.cps()
+        if cps > config.max_cps:
+            out.append(Violation(
+                track, idx, "reading_speed", WARNING,
+                f"{cps:.1f} CPS over {cue.duration:.2f}s "
+                f"(max {config.max_cps:.0f})."))
+
     return out
 
 
-def _sanitize(words: List[Word]) -> List[Word]:
-    """Clamp out-of-order / zero-length word spans so downstream code is safe."""
-    cleaned: List[Word] = []
-    prev_end = 0.0
-    for w in words:
-        start = max(w.start, prev_end)
-        end = max(w.end, start + 1e-3)
-        cleaned.append(Word(text=w.text, start=start, end=end))
-        prev_end = end
-    return cleaned
+def _fmt_ts(seconds: float) -> str:
+    ms = int(round(seconds * 1000))
+    h, ms = divmod(ms, 3_600_000)
+    m, ms = divmod(ms, 60_000)
+    s, ms = divmod(ms, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def build_report(violations: List[Violation],
+                 en_cues: List[Cue], hy_cues: List[Cue]) -> str:
+    """Render a validation_report.txt body from collected violations."""
+    lines: List[str] = []
+    lines.append("SUBTITLE VALIDATION REPORT")
+    lines.append("=" * 60)
+    lines.append(f"English cues: {len(en_cues)}    Armenian cues: {len(hy_cues)}")
+
+    crit = [v for v in violations if v.severity == CRITICAL]
+    warn = [v for v in violations if v.severity == WARNING]
+    lines.append(f"Issues: {len(violations)} total "
+                 f"({len(crit)} CRITICAL, {len(warn)} WARNING)")
+    lines.append("")
+
+    if not violations:
+        lines.append("No issues detected. All cues pass the house style.")
+        return "\n".join(lines) + "\n"
+
+    if crit:
+        lines.append("CRITICAL — flagged for review")
+        lines.append("-" * 60)
+        for v in crit:
+            lines.append(_line_for(v))
+        lines.append("")
+
+    if warn:
+        lines.append("WARNINGS")
+        lines.append("-" * 60)
+        for v in warn:
+            lines.append(_line_for(v))
+        lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
+def _line_for(v: Violation) -> str:
+    where = f"cue {v.cue_index}" if v.cue_index else "file"
+    return f"[{v.track:8s}] {where:>9s}  {v.kind:<16s}  {v.detail}"
