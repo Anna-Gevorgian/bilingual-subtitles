@@ -1,64 +1,33 @@
-# Armenian Punctuation — House Style Reference
+# Armenian Punctuation Standards
 
-This is the authoritative style guide for this project. Apply these rules to
-all translated subtitle lines. No need to verify against an external source.
-
----
+> Reference for the translation step. Verify against your house style; Armenian
+> punctuation differs notably from Latin-script conventions.
 
 ## Sentence-final and pause marks
+- Full stop — վերջակետ: `։` (U+0589). Ends a declarative sentence. It looks
+  like a colon but functions as a period.
+- Comma — ստորակետ: `,` (standard comma) for in-sentence separation.
+- բութ: `՝` (U+055D) marks a short pause in certain constructions.
 
-| Mark | Armenian name | Codepoint | Use |
-|---|---|---|---|
-| `։` | վերջակետ | U+0589 | Ends a declarative sentence (looks like `:` but is a period) |
-| `,` | ստորակետ | — | In-sentence separation |
-| `՝` | բութ | U+055D | Short pause in certain constructions |
+## Marks placed OVER a vowel (not at sentence end)
+Unlike English, these go above the relevant vowel of the word they apply to:
+- Question mark — հարցական նշան: `՞` (U+055E), placed over the last vowel of
+  the word that carries the question.
+- Exclamation mark — բացականչական նշան: `՜` (U+055C), placed over the vowel of
+  the exclaimed/stressed word.
+- Emphasis — շեշտ: `՛` (U+055B), placed over a vowel for emphasis.
 
-## Marks placed OVER a vowel
-
-These three marks attach to the vowel of the relevant word — not to the end of
-the sentence. This is the biggest divergence from Latin-script conventions.
-
-| Mark | Armenian name | Codepoint | Placed over |
-|---|---|---|---|
-| `՞` | հարցական նշան | U+055E | Last vowel of the questioned word |
-| `՜` | բացականչական նշան | U+055C | Vowel of the exclaimed/stressed word |
-| `՛` | շեշտ | U+055B | Any vowel receiving emphasis |
-
-**Examples:**
-
-| English | Wrong  | Correct  |
-|---|---|---|
-| Are you coming? | Դու գալի՞ս ես? | Դու գա՞լիս ես |
-| What a day! | Ի՜նչ օր է! | Ի՜նչ օր է |
-| I told *you* | Ես ձեզ ասացի | Ես ձե՛զ ասացի |
+So an English "Are you coming?" becomes a statement whose questioned word
+carries `՞`, rather than a trailing `?`.
 
 ## Dashes and dialogue
-
-- Em dash `—` opens each dialogue line and marks strong breaks.
-- Armenian hyphen `֊` (U+058A) for connective hyphens within a word.
-- Do not use standard ASCII hyphen `-` where `֊` is required.
+- Use the em dash `—` to mark dialogue lines and strong breaks.
+- Armenian hyphen: `֊` (U+058A) where a connective hyphen is needed.
 
 ## Quotation marks
+- Use angle guillemets «…» for quotations and titles.
 
-- Use angle guillemets `«…»` for all quotations and titles.
-- Do not use `"…"` or `'…'`.
-
----
-
-## Scope
-
-Apply these rules to all subtitle lines including dialogue, titles, and
-on-screen text. Loanwords, URLs, and numerals follow the same punctuation rules
-as native Armenian words.
-
----
-
-## Pre-output checklist
-
-Before finalising each line, verify:
-
-1. Full stop is `։` (U+0589), not `:` (colon).
-2. No trailing `?` or `!` — question and exclamation marks are mid-word.
-3. Dialogue lines open with `—`.
-4. Quotations use `«…»`.
-5. Line is within the 42-character budget.
+## Practical notes for subtitles
+- Do not simply copy Latin `?` and `!` to sentence ends; convert to the
+  Armenian over-vowel marks.
+- Keep punctuation inside the 42-character line budget.
