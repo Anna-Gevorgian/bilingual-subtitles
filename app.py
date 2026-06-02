@@ -12,8 +12,21 @@ from pipeline import run_pipeline
 
 logging.basicConfig(level=logging.INFO)
 
-st.set_page_config(page_title="Bilingual Subtitles (EN + HY)")
-st.title("Bilingual Subtitle Generator")
+st.set_page_config(page_title="Bilingual Subtitles (EN + HY)", layout="wide", page_icon="🎬")
+st.markdown(
+    """
+    <style>
+      /* Make the main content area use the full page width */
+      .block-container {
+          max-width: 100% !important;
+          padding-left: 3rem;
+          padding-right: 3rem;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.title("🎬 Bilingual Subtitle Generator")
 st.caption("English + Armenian subtitles from short videos (≤ 3 min). "
            "Whisper ASR · RAG-conditioned LLM cleanup & translation · validation.")
 
@@ -75,15 +88,15 @@ if run and uploaded is not None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.download_button("English .srt",
+        st.download_button("⬇️ English .srt",
                            Path(result.english_srt).read_bytes(),
                            file_name="english_subtitles.srt")
     with col2:
-        st.download_button("Armenian .srt",
+        st.download_button("⬇️ Armenian .srt",
                            Path(result.armenian_srt).read_bytes(),
                            file_name="armenian_subtitles.srt")
     with col3:
-        st.download_button("Report .txt",
+        st.download_button("⬇️ Report .txt",
                            Path(result.report_txt).read_bytes(),
                            file_name="validation_report.txt")
 
